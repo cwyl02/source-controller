@@ -240,19 +240,26 @@ func (r *HelmRepositoryReconciler) reconcile(ctx context.Context, obj *sourcev1.
 		res = sreconcile.LowestRequeuingResult(res, recResult)
 	}
 
-	r.notify(oldObj, obj, chartRepo, res, resErr)
+	r.notify(ctx, oldObj, obj, chartRepo, res, resErr)
 
 	return res, resErr
 }
 
 // notify emits notification related to the reconciliation.
-func (r *HelmRepositoryReconciler) notify(oldObj, newObj *sourcev1.HelmRepository, chartRepo repository.ChartRepository, res sreconcile.Result, resErr error) {
+func (r *HelmRepositoryReconciler) notify(ctx context.Context, oldObj, newObj *sourcev1.HelmRepository, chartRepo repository.ChartRepository, res sreconcile.Result, resErr error) {
 	// Notify successful reconciliation for new artifact and recovery from any
 	// failure.
+	log := ctrl.LoggerFrom(ctx)
+
 	if resErr == nil && res == sreconcile.ResultSuccess && newObj.Status.Artifact != nil {
 		annotations := map[string]string{
 			sourcev1.GroupVersion.Group + "/revision": newObj.Status.Artifact.Revision,
 			sourcev1.GroupVersion.Group + "/checksum": newObj.Status.Artifact.Checksum,
+		}
+
+		if *newObj.Status.Artifact.Size == nil {
+			log.Info("Artifact size is nil, skip emitting notification")
+			return
 		}
 
 		size := units.HumanSize(float64(*newObj.Status.Artifact.Size))
